@@ -25,7 +25,6 @@ import com.amazonaws.exception.UnableToUpdateException;
 import com.amazonaws.model.Order;
 import com.amazonaws.model.OrderPage;
 import com.amazonaws.model.request.CreateOrderRequest;
-import org.junit.Test;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
@@ -48,8 +47,15 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.junit.Assert.*;
-import static org.mockito.Matchers.any;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+
 import static org.mockito.Mockito.*;
 
 public class OrderDaoTest {
@@ -57,29 +63,40 @@ public class OrderDaoTest {
     private DynamoDbClient dynamoDb = mock(DynamoDbClient.class);
     private OrderDao sut = new OrderDao(dynamoDb, "table_name", 10);
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void createOrder_whenRequestNull_throwsIllegalArgumentException() {
-        sut.createOrder(null);
+        assertThrows(IllegalArgumentException.class, () -> {
+            sut.createOrder(null);
+        });
+
     }
 
-    //test CRUD when table does not exist
-    @Test(expected = TableDoesNotExistException.class)
+    // test CRUD when table does not exist
+    @Test
     public void createOrder_whenTableDoesNotExist_throwsTableDoesNotExistException() {
         doThrow(ResourceNotFoundException.builder().build()).when(dynamoDb).putItem(any(PutItemRequest.class));
-        sut.createOrder(CreateOrderRequest.builder()
-                .preTaxAmount(100L).postTaxAmount(109L).customerId("me").build());
+        assertThrows(TableDoesNotExistException.class, () -> {
+            sut.createOrder(CreateOrderRequest.builder()
+                    .preTaxAmount(100L).postTaxAmount(109L).customerId("me").build());
+
+        });
     }
 
-    @Test(expected = TableDoesNotExistException.class)
+    @Test
     public void getOrder_whenTableDoesNotExist_throwsTableDoesNotExistException() {
         doThrow(ResourceNotFoundException.builder().build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(TableDoesNotExistException.class, () -> {
+
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = TableDoesNotExistException.class)
+    @Test
     public void getOrders_whenTableDoesNotExist_throwsTableDoesNotExistException() {
         doThrow(ResourceNotFoundException.builder().build()).when(dynamoDb).scan(any(ScanRequest.class));
-        sut.getOrders(any());
+        assertThrows(TableDoesNotExistException.class, () -> {
+            sut.getOrders(any());
+        });
     }
 
     @Test
@@ -95,34 +112,38 @@ public class OrderDaoTest {
         assertNull(page.getLastEvaluatedKey());
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrders_whenTableNotEmpty_butLastEvaluatedKeyHasOrderIdSetToWrongType_throwsIllegalStateException() {
         doReturn(ScanResponse.builder()
                 .items(Collections.singletonList(new HashMap<>()))
                 .lastEvaluatedKey(Collections.singletonMap("orderId", AttributeValue.builder().nul(true).build()))
-                .build()
-        ).when(dynamoDb).scan(any(ScanRequest.class));
-        sut.getOrders(any());
+                .build()).when(dynamoDb).scan(any(ScanRequest.class));
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrders(any());
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrders_whenTableNotEmpty_butLastEvaluatedKeyHasOrderIdSetToUnsetAv_throwsIllegalStateException() {
         doReturn(ScanResponse.builder()
                 .items(Collections.singletonList(new HashMap<>()))
                 .lastEvaluatedKey(Collections.singletonMap("orderId", AttributeValue.builder().build()))
-                .build()
-        ).when(dynamoDb).scan(any(ScanRequest.class));
-        sut.getOrders(any());
+                .build()).when(dynamoDb).scan(any(ScanRequest.class));
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrders(any());
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrders_whenTableNotEmpty_butLastEvaluatedKeyHasOrderIdSetToEmptyString_throwsIllegalStateException() {
         doReturn(ScanResponse.builder()
                 .items(Collections.singletonList(new HashMap<>()))
                 .lastEvaluatedKey(Collections.singletonMap("orderId", AttributeValue.builder().s("").build()))
-                .build()
-        ).when(dynamoDb).scan(any(ScanRequest.class));
-        sut.getOrders(any());
+                .build()).when(dynamoDb).scan(any(ScanRequest.class));
+        assertThrows(IllegalStateException.class, () -> {
+
+            sut.getOrders(any());
+        });
     }
 
     @Test
@@ -140,73 +161,94 @@ public class OrderDaoTest {
         sut.getOrders(any());
     }
 
-    @Test(expected = TableDoesNotExistException.class)
+    @Test
     public void updateOrder_whenTableDoesNotExistOnLoadItem_throwsTableDoesNotExistException() {
         doThrow(ResourceNotFoundException.builder().build()).when(dynamoDb).updateItem(any(UpdateItemRequest.class));
-        sut.updateOrder(Order.builder()
-                .orderId(ORDER_ID)
-                .customerId("customer")
-                .preTaxAmount(BigDecimal.ONE)
-                .postTaxAmount(BigDecimal.TEN)
-                .version(0L)
-                .build());
+        assertThrows(TableDoesNotExistException.class, () -> {
+            sut.updateOrder(Order.builder()
+                    .orderId(ORDER_ID)
+                    .customerId("customer")
+                    .preTaxAmount(BigDecimal.ONE)
+                    .postTaxAmount(BigDecimal.TEN)
+                    .version(0L)
+                    .build());
+        });
+
     }
 
-    @Test(expected = TableDoesNotExistException.class)
+    @Test
     public void updateOrder_whenTableDoesNotExist_throwsTableDoesNotExistException() {
         doThrow(ResourceNotFoundException.builder().build()).when(dynamoDb).updateItem(any(UpdateItemRequest.class));
-        sut.updateOrder(Order.builder()
-                .orderId(ORDER_ID)
-                .customerId("customer")
-                .preTaxAmount(BigDecimal.ONE)
-                .postTaxAmount(BigDecimal.TEN)
-                .version(1L)
-                .build());
+        assertThrows(TableDoesNotExistException.class, () -> {
+            sut.updateOrder(Order.builder()
+                    .orderId(ORDER_ID)
+                    .customerId("customer")
+                    .preTaxAmount(BigDecimal.ONE)
+                    .postTaxAmount(BigDecimal.TEN)
+                    .version(1L)
+                    .build());
+        });
+
     }
 
-    @Test(expected = TableDoesNotExistException.class)
+    @Test
     public void deleteOrder_whenTableDoesNotExist_throwsTableDoesNotExistException() {
         Map<String, AttributeValue> orderItem = new HashMap<>();
         orderItem.put("orderId", AttributeValue.builder().s(ORDER_ID).build());
         orderItem.put("version", AttributeValue.builder().n("1").build());
         doReturn(GetItemResponse.builder().item(orderItem).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
         doThrow(ResourceNotFoundException.builder().build()).when(dynamoDb).deleteItem(any(DeleteItemRequest.class));
-        sut.deleteOrder(ORDER_ID);
+        assertThrows(TableDoesNotExistException.class, () -> {
+            sut.deleteOrder(ORDER_ID);
+        });
     }
 
-    //conditional failure tests
-    @Test(expected = CouldNotCreateOrderException.class)
+    // conditional failure tests
+    @Test
     public void createOrder_whenAlreadyExists_throwsCouldNotCreateOrderException() {
         doThrow(ConditionalCheckFailedException.builder().build()).when(dynamoDb).putItem(any(PutItemRequest.class));
-        sut.createOrder(CreateOrderRequest.builder()
-                .preTaxAmount(100L).postTaxAmount(109L).customerId("me").build());
+        assertThrows(CouldNotCreateOrderException.class, () -> {
+            sut.createOrder(CreateOrderRequest.builder()
+                    .preTaxAmount(100L).postTaxAmount(109L).customerId("me").build());
+
+        });
     }
 
-    @Test(expected = UnableToDeleteException.class)
+    @Test
     public void deleteOrder_whenVersionMismatch_throwsUnableToDeleteException() {
         doThrow(ConditionalCheckFailedException.builder().build())
                 .when(dynamoDb).deleteItem(any(DeleteItemRequest.class));
-        sut.deleteOrder(ORDER_ID);
+        assertThrows(UnableToDeleteException.class, () -> {
+            sut.deleteOrder(ORDER_ID);
+        });
+
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void deleteOrder_whenDeleteItemReturnsNull_throwsIllegalStateException() {
         doReturn(null).when(dynamoDb).deleteItem(any(DeleteItemRequest.class));
-        sut.deleteOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.deleteOrder(ORDER_ID);
+        });
+
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void deleteOrder_whenDeleteItemReturnsNoAttributes_throwsIllegalStateException() {
         doReturn(DeleteItemResponse.builder().build())
                 .when(dynamoDb).deleteItem(any(DeleteItemRequest.class));
-        sut.deleteOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.deleteOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void deleteOrder_whenDeleteItemReturnsEmptyAttributes_throwsIllegalStateException() {
         doReturn(DeleteItemResponse.builder().attributes(new HashMap<>()).build())
                 .when(dynamoDb).deleteItem(any(DeleteItemRequest.class));
-        sut.deleteOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.deleteOrder(ORDER_ID);
+        });
     }
 
     @Test
@@ -223,7 +265,7 @@ public class OrderDaoTest {
         assertNotNull(deleted);
     }
 
-    @Test(expected = UnableToUpdateException.class)
+    @Test
     public void updateOrder_whenVersionMismatch_throwsUnableToUpdateException() {
         Map<String, AttributeValue> orderItem = new HashMap<>();
         orderItem.put("orderId", AttributeValue.builder().s(ORDER_ID).build());
@@ -238,36 +280,48 @@ public class OrderDaoTest {
         postOrder.setPostTaxAmount(BigDecimal.TEN);
         doThrow(ConditionalCheckFailedException.builder().build())
                 .when(dynamoDb).updateItem(any(UpdateItemRequest.class));
-        sut.updateOrder(postOrder);
+        assertThrows(UnableToUpdateException.class, () -> {
+            sut.updateOrder(postOrder);
+        });
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void updateOrder_whenOrderIsNull_throwsIllegalArgumentException() {
-        sut.updateOrder(null);
+        assertThrows(IllegalArgumentException.class, () -> {
+            sut.updateOrder(null);
+        });
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void updateOrder_whenAllNotSet_throwsIllegalArgumentException() {
         Order postOrder = new Order();
-        sut.updateOrder(postOrder);
+        assertThrows(IllegalArgumentException.class, () -> {
+            sut.updateOrder(postOrder);
+        });
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void updateOrder_whenOrderIdSetButEmpty_throwsIllegalArgumentException() {
         Order postOrder = new Order();
         postOrder.setOrderId("");
-        sut.updateOrder(postOrder);
+        assertThrows(IllegalArgumentException.class, () -> {
+            sut.updateOrder(postOrder);
+        });
+
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void updateOrder_whenCustomerIdSetButEmpty_throwsIllegalArgumentException() {
         Order postOrder = new Order();
         postOrder.setOrderId("s");
         postOrder.setCustomerId("");
-        sut.updateOrder(postOrder);
+        assertThrows(IllegalArgumentException.class, () -> {
+            sut.updateOrder(postOrder);
+        });
+
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void updateOrder_whenPreTaxAmountNull_throwsIllegalArgumentException() {
         Order postOrder = new Order();
         postOrder.setOrderId("s");
@@ -275,10 +329,13 @@ public class OrderDaoTest {
         postOrder.setPreTaxAmount(null);
         postOrder.setPostTaxAmount(BigDecimal.TEN);
         postOrder.setVersion(1L);
-        sut.updateOrder(postOrder);
+        assertThrows(IllegalArgumentException.class, () -> {
+            sut.updateOrder(postOrder);
+        });
+
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void updateOrder_whenPostTaxAmountNull_throwsIllegalArgumentException() {
         Order postOrder = new Order();
         postOrder.setOrderId("s");
@@ -286,10 +343,13 @@ public class OrderDaoTest {
         postOrder.setPreTaxAmount(BigDecimal.ONE);
         postOrder.setPostTaxAmount(null);
         postOrder.setVersion(1L);
-        sut.updateOrder(postOrder);
+        assertThrows(IllegalArgumentException.class, () -> {
+            sut.updateOrder(postOrder);
+        });
+
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void updateOrder_whenVersionNull_throwsIllegalArgumentException() {
         Order postOrder = new Order();
         postOrder.setOrderId("s");
@@ -297,7 +357,9 @@ public class OrderDaoTest {
         postOrder.setPreTaxAmount(BigDecimal.ONE);
         postOrder.setPostTaxAmount(BigDecimal.TEN);
         postOrder.setVersion(null);
-        sut.updateOrder(postOrder);
+        assertThrows(IllegalArgumentException.class, () -> {
+            sut.updateOrder(postOrder);
+        });
     }
 
     @Test
@@ -322,7 +384,7 @@ public class OrderDaoTest {
         assertEquals(createdItem.get("orderId").s(), order.getOrderId());
     }
 
-    //positive functional tests
+    // positive functional tests
     @Test
     public void createOrder_whenOrderDoesNotExist_createsOrderWithPopulatedOrderId() {
         Map<String, AttributeValue> createdItem = new HashMap<>();
@@ -331,14 +393,15 @@ public class OrderDaoTest {
         createdItem.put("preTaxAmount", AttributeValue.builder().n("1").build());
         createdItem.put("postTaxAmount", AttributeValue.builder().n("10").build());
         createdItem.put("version", AttributeValue.builder().n("1").build());
-        doReturn(PutItemResponse.builder().attributes(createdItem).build()).when(dynamoDb).putItem(any(PutItemRequest.class));
+        doReturn(PutItemResponse.builder().attributes(createdItem).build()).when(dynamoDb)
+                .putItem(any(PutItemRequest.class));
 
         Order order = sut.createOrder(CreateOrderRequest.builder()
                 .customerId("customer")
                 .preTaxAmount(1L)
                 .postTaxAmount(10L).build());
         assertNotNull(order.getVersion());
-        //for a new item, object mapper sets version to 1
+        // for a new item, object mapper sets version to 1
         assertEquals(1L, order.getVersion().longValue());
         assertEquals("customer", order.getCustomerId());
         assertEquals(BigDecimal.ONE, order.getPreTaxAmount());
@@ -347,100 +410,123 @@ public class OrderDaoTest {
         assertNotNull(UUID.fromString(order.getOrderId()));
     }
 
-    @Test(expected = OrderDoesNotExistException.class)
+    @Test
     public void getOrder_whenOrderDoesNotExist_throwsOrderDoesNotExist() {
         doReturn(GetItemResponse.builder().item(null).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(OrderDoesNotExistException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = OrderDoesNotExistException.class)
+    @Test
     public void getOrder_whenGetItemReturnsEmptyHashMap_throwsIllegalStateException() {
-        doReturn(GetItemResponse.builder().item(new HashMap<>()).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        doReturn(GetItemResponse.builder().item(new HashMap<>()).build()).when(dynamoDb)
+                .getItem(any(GetItemRequest.class));
+        assertThrows(OrderDoesNotExistException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrder_whenGetItemReturnsHashMapWithOrderIdWrongType_throwsIllegalStateException() {
         Map<String, AttributeValue> map = new HashMap<>();
         map.put("orderId", AttributeValue.builder().nul(true).build());
         doReturn(GetItemResponse.builder().item(map).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrder_whenGetItemReturnsHashMapWithUnsetOrderIdAV_throwsIllegalStateException() {
         Map<String, AttributeValue> map = new HashMap<>();
         map.put("orderId", AttributeValue.builder().build());
         doReturn(GetItemResponse.builder().item(map).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrder_whenGetItemReturnsHashMapWithEmptyOrderId_throwsIllegalStateException() {
         Map<String, AttributeValue> map = new HashMap<>();
         map.put("orderId", AttributeValue.builder().s("").build());
         doReturn(GetItemResponse.builder().item(map).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrder_whenGetItemReturnsHashMapWithCustomerIdWrongType_throwsIllegalStateException() {
         Map<String, AttributeValue> map = new HashMap<>();
         map.put("orderId", AttributeValue.builder().s("a").build());
         map.put("customerId", AttributeValue.builder().nul(true).build());
         doReturn(GetItemResponse.builder().item(map).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrder_whenGetItemReturnsHashMapWithUnsetCustomerIdAV_throwsIllegalStateException() {
         Map<String, AttributeValue> map = new HashMap<>();
         map.put("orderId", AttributeValue.builder().s("a").build());
         map.put("customerId", AttributeValue.builder().build());
         doReturn(GetItemResponse.builder().item(map).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrder_whenGetItemReturnsHashMapWithEmptyCustomerId_throwsIllegalStateException() {
         Map<String, AttributeValue> map = new HashMap<>();
         map.put("orderId", AttributeValue.builder().s("a").build());
         map.put("customerId", AttributeValue.builder().s("").build());
         doReturn(GetItemResponse.builder().item(map).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrder_whenGetItemReturnsHashMapWithPreTaxWrongType_throwsIllegalStateException() {
         Map<String, AttributeValue> map = new HashMap<>();
         map.put("orderId", AttributeValue.builder().s("a").build());
         map.put("customerId", AttributeValue.builder().s("a").build());
         map.put("preTaxAmount", AttributeValue.builder().nul(true).build());
         doReturn(GetItemResponse.builder().item(map).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrder_whenGetItemReturnsHashMapWithUnsetPreTaxAV_throwsIllegalStateException() {
         Map<String, AttributeValue> map = new HashMap<>();
         map.put("orderId", AttributeValue.builder().s("a").build());
         map.put("customerId", AttributeValue.builder().s("a").build());
         map.put("preTaxAmount", AttributeValue.builder().build());
         doReturn(GetItemResponse.builder().item(map).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrder_whenGetItemReturnsHashMapWithInvalidPreTax_throwsIllegalStateException() {
         Map<String, AttributeValue> map = new HashMap<>();
         map.put("orderId", AttributeValue.builder().s("a").build());
         map.put("customerId", AttributeValue.builder().s("a").build());
         map.put("preTaxAmount", AttributeValue.builder().n("a").build());
         doReturn(GetItemResponse.builder().item(map).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrder_whenGetItemReturnsHashMapWithPostTaxWrongType_throwsIllegalStateException() {
         Map<String, AttributeValue> map = new HashMap<>();
         map.put("orderId", AttributeValue.builder().s("a").build());
@@ -448,10 +534,12 @@ public class OrderDaoTest {
         map.put("preTaxAmount", AttributeValue.builder().n("1").build());
         map.put("postTaxAmount", AttributeValue.builder().nul(true).build());
         doReturn(GetItemResponse.builder().item(map).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrder_whenGetItemReturnsHashMapWithUnsetPostTaxAV_throwsIllegalStateException() {
         Map<String, AttributeValue> map = new HashMap<>();
         map.put("orderId", AttributeValue.builder().s("a").build());
@@ -459,10 +547,12 @@ public class OrderDaoTest {
         map.put("preTaxAmount", AttributeValue.builder().n("1").build());
         map.put("postTaxAmount", AttributeValue.builder().build());
         doReturn(GetItemResponse.builder().item(map).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrder_whenGetItemReturnsHashMapWithInvalidPostTax_throwsIllegalStateException() {
         Map<String, AttributeValue> map = new HashMap<>();
         map.put("orderId", AttributeValue.builder().s("a").build());
@@ -470,10 +560,12 @@ public class OrderDaoTest {
         map.put("preTaxAmount", AttributeValue.builder().n("1").build());
         map.put("postTaxAmount", AttributeValue.builder().n("a").build());
         doReturn(GetItemResponse.builder().item(map).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrder_whenGetItemReturnsHashMapWithVersionOfWrongType_throwsIllegalStateException() {
         Map<String, AttributeValue> map = new HashMap<>();
         map.put("orderId", AttributeValue.builder().s("a").build());
@@ -482,10 +574,12 @@ public class OrderDaoTest {
         map.put("postTaxAmount", AttributeValue.builder().n("10").build());
         map.put("version", AttributeValue.builder().ss("").build());
         doReturn(GetItemResponse.builder().item(map).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrder_whenGetItemReturnsHashMapWithUnsetVersionAV_throwsIllegalStateException() {
         Map<String, AttributeValue> map = new HashMap<>();
         map.put("orderId", AttributeValue.builder().s("a").build());
@@ -494,10 +588,12 @@ public class OrderDaoTest {
         map.put("postTaxAmount", AttributeValue.builder().n("10").build());
         map.put("version", AttributeValue.builder().build());
         doReturn(GetItemResponse.builder().item(map).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void getOrder_whenGetItemReturnsHashMapWithInvalidVersion_throwsIllegalStateException() {
         Map<String, AttributeValue> map = new HashMap<>();
         map.put("orderId", AttributeValue.builder().s("a").build());
@@ -506,7 +602,9 @@ public class OrderDaoTest {
         map.put("postTaxAmount", AttributeValue.builder().n("10").build());
         map.put("version", AttributeValue.builder().n("a").build());
         doReturn(GetItemResponse.builder().item(map).build()).when(dynamoDb).getItem(any(GetItemRequest.class));
-        sut.getOrder(ORDER_ID);
+        assertThrows(IllegalStateException.class, () -> {
+            sut.getOrder(ORDER_ID);
+        });
     }
 
     @Test
@@ -526,5 +624,5 @@ public class OrderDaoTest {
         assertEquals("customer", order.getCustomerId());
     }
 
-    //connection dropped corner cases
+    // connection dropped corner cases
 }

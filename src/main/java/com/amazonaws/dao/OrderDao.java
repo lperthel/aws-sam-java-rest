@@ -52,8 +52,7 @@ import java.util.stream.Collectors;
 
 public class OrderDao {
 
-    private static final String UPDATE_EXPRESSION
-            = "SET customerId = :cid, preTaxAmount = :pre, postTaxAmount = :post ADD version :o";
+    private static final String UPDATE_EXPRESSION = "SET customerId = :cid, preTaxAmount = :pre, postTaxAmount = :post ADD version :o";
     private static final String ORDER_ID = "orderId";
     private static final String PRE_TAX_AMOUNT_WAS_NULL = "preTaxAmount was null";
     private static final String POST_TAX_AMOUNT_WAS_NULL = "postTaxAmount was null";
@@ -65,12 +64,13 @@ public class OrderDao {
 
     /**
      * Constructs an OrderDao.
-     * @param dynamoDb dynamodb client
+     * 
+     * @param dynamoDb  dynamodb client
      * @param tableName name of table to use for orders
-     * @param pageSize size of pages for getOrders
+     * @param pageSize  size of pages for getOrders
      */
     public OrderDao(final DynamoDbClient dynamoDb, final String tableName,
-                    final int pageSize) {
+            final int pageSize) {
         this.dynamoDb = dynamoDb;
         this.tableName = tableName;
         this.pageSize = pageSize;
@@ -78,6 +78,7 @@ public class OrderDao {
 
     /**
      * Returns an order or throws if the order does not exist.
+     * 
      * @param orderId id of order to get
      * @return the order if it exists
      * @throws OrderDoesNotExistException if the order does not exist
@@ -101,6 +102,7 @@ public class OrderDao {
 
     /**
      * Gets a page of orders, at most pageSize long.
+     * 
      * @param exclusiveStartOrderId the exclusive start id for the next page.
      * @return a page of orders.
      * @throws TableDoesNotExistException if the order table does not exist
@@ -131,7 +133,7 @@ public class OrderDao {
             if ((!result.lastEvaluatedKey().containsKey(ORDER_ID)
                     || isNullOrEmpty(result.lastEvaluatedKey().get(ORDER_ID).s()))) {
                 throw new IllegalStateException(
-                    "orderId did not exist or was not a non-empty string in the lastEvaluatedKey");
+                        "orderId did not exist or was not a non-empty string in the lastEvaluatedKey");
             } else {
                 builder.lastEvaluatedKey(result.lastEvaluatedKey().get(ORDER_ID).s());
             }
@@ -142,6 +144,7 @@ public class OrderDao {
 
     /**
      * Updates an order object.
+     * 
      * @param order order to update
      * @return updated order
      */
@@ -199,19 +202,20 @@ public class OrderDao {
 
     /**
      * Deletes an order.
+     * 
      * @param orderId order id of order to delete
      * @return the deleted order
      */
     public Order deleteOrder(final String orderId) {
-        final DeleteItemResponse result;
+
         try {
             return Optional.ofNullable(dynamoDb.deleteItem(DeleteItemRequest.builder()
-                            .tableName(tableName)
-                            .key(Collections.singletonMap(ORDER_ID,
-                                    AttributeValue.builder().s(orderId).build()))
-                            .conditionExpression("attribute_exists(orderId)")
-                            .returnValues(ReturnValue.ALL_OLD)
-                            .build()))
+                    .tableName(tableName)
+                    .key(Collections.singletonMap(ORDER_ID,
+                            AttributeValue.builder().s(orderId).build()))
+                    .conditionExpression("attribute_exists(orderId)")
+                    .returnValues(ReturnValue.ALL_OLD)
+                    .build()))
                     .map(DeleteItemResponse::attributes)
                     .map(this::convert)
                     .orElseThrow(() -> new IllegalStateException(
@@ -300,6 +304,7 @@ public class OrderDao {
 
     /**
      * Creates an order.
+     * 
      * @param createOrderRequest details of order to create
      * @return created order
      */
@@ -338,4 +343,3 @@ public class OrderDao {
         return string == null || string.isEmpty();
     }
 }
-

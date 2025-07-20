@@ -1,0 +1,5 @@
+
+compose.log
+docker.log
+*.log
+/target

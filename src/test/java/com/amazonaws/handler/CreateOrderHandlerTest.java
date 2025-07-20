@@ -18,13 +18,14 @@
 package com.amazonaws.handler;
 
 import com.amazonaws.services.lambda.runtime.TestContext;
-import org.junit.Test;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
-import static org.junit.Assert.assertTrue;
+import org.junit.jupiter.api.Test;
 
 public class CreateOrderHandlerTest {
     private CreateOrderHandler sut = new CreateOrderHandler();
@@ -83,7 +84,8 @@ public class CreateOrderHandlerTest {
     }
 
     @Test
-    public void handleRequest_whenCreateOrderInputStreamDoesNotHavePostTaxAmount_puts400InOutputStream() throws IOException {
+    public void handleRequest_whenCreateOrderInputStreamDoesNotHavePostTaxAmount_puts400InOutputStream()
+            throws IOException {
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         String input = "{\"body\": \"{\\\"customerId\\\": \\\"customer\\\", \\\"preTaxAmount\\\": 1}\"}";
         sut.handleRequest(new ByteArrayInputStream(input.getBytes()), os, TestContext.builder().build());

@@ -19,8 +19,6 @@ package com.amazonaws.handler;
 
 import com.amazonaws.config.DaggerOrderTestComponent;
 import com.amazonaws.config.OrderTestComponent;
-import org.junit.After;
-import org.junit.Before;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeDefinition;
 import software.amazon.awssdk.services.dynamodb.model.CreateTableRequest;
@@ -31,6 +29,9 @@ import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput;
 import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType;
 
 import javax.inject.Inject;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 
 /**
  * This class serves as the base class for Integration tests. do not include I T in
@@ -49,7 +50,7 @@ public abstract class OrderHandlerTestBase {
         orderComponent.inject(this);
     }
 
-    @Before
+    @BeforeEach
     public void setup() {
         dynamoDb.createTable(CreateTableRequest.builder()
                 .tableName(TABLE_NAME)
@@ -71,7 +72,7 @@ public abstract class OrderHandlerTestBase {
 
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         dynamoDb.deleteTable(DeleteTableRequest.builder().tableName(TABLE_NAME).build());
     }

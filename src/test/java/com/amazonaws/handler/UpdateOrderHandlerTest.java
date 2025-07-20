@@ -18,13 +18,15 @@
 package com.amazonaws.handler;
 
 import com.amazonaws.services.lambda.runtime.TestContext;
-import org.junit.Test;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 
-import static org.junit.Assert.assertTrue;
+import org.junit.jupiter.api.Test;
+
 
 public class UpdateOrderHandlerTest {
     private UpdateOrderHandler sut = new UpdateOrderHandler();

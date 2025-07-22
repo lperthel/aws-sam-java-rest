@@ -48,7 +48,8 @@ public class GetOrdersHandler implements OrderRequestStreamHandler {
 
     @Override
     public void handleRequest(InputStream input, OutputStream output,
-                              Context context) throws IOException {
+            Context context) throws IOException {
+        System.out.println("==== Entered handleRequest ====");
         final JsonNode event;
         try {
             event = objectMapper.readTree(input);
@@ -62,7 +63,7 @@ public class GetOrdersHandler implements OrderRequestStreamHandler {
                 .orElse(null);
 
         OrderPage page = orderDao.getOrders(exclusiveStartKeyQueryParameter);
-        //TODO handle exceptions
+        // TODO handle exceptions
         objectMapper.writeValue(output, new GatewayResponse<>(
                 objectMapper.writeValueAsString(
                         new GetOrdersResponse(page.getLastEvaluatedKey(), page.getOrders())),

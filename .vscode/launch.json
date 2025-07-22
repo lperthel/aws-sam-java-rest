@@ -1,0 +1,47 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach HealthCheckFunction",
+            "type": "java",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5850
+        },
+        {
+            "name": "Attach GetOrderFunction",
+            "type": "java",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5851
+        },
+        {
+            "name": "Attach GetOrdersFunction",
+            "type": "java",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5852
+        },
+        {
+            "name": "Attach UpdateOrderFunction",
+            "type": "java",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5853
+        },
+        {
+            "name": "Attach DeleteOrderFunction",
+            "type": "java",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5854
+        },
+        {
+            "name": "Attach CreateOrderFunction",
+            "type": "java",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5855
+        }
+    ]
+}

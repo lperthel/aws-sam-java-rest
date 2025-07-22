@@ -1,130 +1,167 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
+
+# Enable AWS SAM features like simplified function and API definitions
 Transform: AWS::Serverless-2016-10-31
+
+# A description of this template
 Description: >
-    sam-app
+  sam-app
 
-    Sample SAM Template for sam-app
+  Sample SAM Template for sam-app
 
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+# Globals apply to all AWS::Serverless::Function resources below unless overridden
 Globals:
-    Function:
-        Timeout: 20
-        MemorySize: 512
-        Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
-          Variables:
-            TABLE_NAME: !Ref OrdersTable
-            ENDPOINT_OVERRIDE: ""
+  Function:
+    Runtime: java21 # Java 21 is used for all Lambda functions
+    Timeout: 20 # Default timeout for Lambda functions in seconds
+    MemorySize: 512 # Memory allocated to Lambda functions
+    Environment: # Default environment variables for all functions
+      Variables:
+        TABLE_NAME: !Ref OrdersTable # Reference the DynamoDB table name
+        ENDPOINT_OVERRIDE: http://host.docker.internal:8000 # Used for local dev with DynamoDB Local
+
+Parameters:
+  TableName:
+    Type: String
+    Default: orders_table
+    Description: "DynamoDB table name (can be overridden at deploy time)"
 
 Resources:
-  GetOrderFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  # A simple Lambda for checking API uptime at /health
+  HealthCheckFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      CodeUri: target/aws-sam-java-rest-1.0.0.jar
+      CodeUri: . # Use source code from the current directory
+      Handler: com.amazonaws.handler.HealthCheckHandler::handleRequest # Java class and method to invoke
+      Policies: [] # No permissions needed for health check
+      Events: # Defines an API Gateway route that triggers this Lambda.
+        # SAM automatically creates and configures the API Gateway.
+        HealthCheck:
+          Type: Api # Connects Lambda to API Gateway
+          Properties:
+            Path: /health # Route path
+            Method: get # HTTP GET method
+
+  # Lambda to get a single order by orderId
+  GetOrderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
       Handler: com.amazonaws.handler.GetOrderHandler::handleRequest
-      Runtime: java8
       Policies:
-        - DynamoDBReadPolicy:
+        - DynamoDBReadPolicy: # Grants read access to the OrdersTable
             TableName: !Ref OrdersTable
       Events:
         GetOrder:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Type: Api
           Properties:
-            Path: /orders/{order_id}
+            Path: /orders/{order_id} # Path includes a dynamic path parameter
             Method: get
+    Metadata:
+      BuildProperties:
+        Maven:
+          Goals: ["verify"]
+
+  # Lambda to get all orders
   GetOrdersFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
     Properties:
-      CodeUri: target/aws-sam-java-rest-1.0.0.jar
+      CodeUri: .
       Handler: com.amazonaws.handler.GetOrdersHandler::handleRequest
-      Runtime: java8
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref OrdersTable
       Events:
         GetOrders:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Type: Api
           Properties:
             Path: /orders
             Method: get
+
+  # Lambda to update an order (uses POST for update)
   UpdateOrderFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
     Properties:
-      CodeUri: target/aws-sam-java-rest-1.0.0.jar
+      CodeUri: .
       Handler: com.amazonaws.handler.UpdateOrderHandler::handleRequest
-      Runtime: java8
       Policies:
-        - DynamoDBCrudPolicy:
+        - DynamoDBCrudPolicy: # Grants full CRUD access to OrdersTable
             TableName: !Ref OrdersTable
       Events:
         UpdateOrder:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Type: Api
           Properties:
             Path: /orders/{order_id}
             Method: post
+
+  # Lambda to delete an order
   DeleteOrderFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
     Properties:
-      CodeUri: target/aws-sam-java-rest-1.0.0.jar
+      CodeUri: .
       Handler: com.amazonaws.handler.DeleteOrderHandler::handleRequest
-      Runtime: java8
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref OrdersTable
       Events:
         DeleteOrder:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Type: Api
           Properties:
             Path: /orders/{order_id}
             Method: delete
+
+  # Lambda to create a new order
   CreateOrderFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
     Properties:
-      CodeUri: target/aws-sam-java-rest-1.0.0.jar
+      CodeUri: .
       Handler: com.amazonaws.handler.CreateOrderHandler::handleRequest
-      Runtime: java8
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref OrdersTable
       Events:
         CreateOrder:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Type: Api
           Properties:
             Path: /orders
             Method: post
 
+  # Definition of the DynamoDB table used to store orders
   OrdersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: orders_table
+      TableName: orders_table # Actual table name (must match your handler logic)
       AttributeDefinitions:
-        - AttributeName: orderId
-          AttributeType: S
+        - AttributeName: orderId # Define partition key
+          AttributeType: S # String type
       KeySchema:
         - AttributeName: orderId
           KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
+      BillingMode: PAY_PER_REQUEST # Serverless pricing model — no provisioned throughput
 
 Outputs:
-    HelloWorldApi:
-      Description: "API Gateway endpoint URL for Prod stage for Hello World function"
-      Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
+  # Output the full URL to the health check endpoint (useful for smoke tests or monitoring)
+  HealthCheckUrl:
+    Description: "API Gateway health check endpoint"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/health"
 
-    GetOrderFunction:
-      Description: "GetOrder Lambda Function ARN"
-      Value: !GetAtt GetOrderFunction.Arn
+  # Output the ARN for each Lambda function (can be used for debugging, permissions, etc.)
+  GetOrderFunction:
+    Description: "GetOrder Lambda Function ARN"
+    Value: !GetAtt GetOrderFunction.Arn
 
-    GetOrdersFunction:
-      Description: "GetOrders Lambda Function ARN"
-      Value: !GetAtt GetOrdersFunction.Arn
+  GetOrdersFunction:
+    Description: "GetOrders Lambda Function ARN"
+    Value: !GetAtt GetOrdersFunction.Arn
 
-    UpdateOrderFunction:
-      Description: "UpdateOrder Lambda Function ARN"
-      Value: !GetAtt UpdateOrderFunction.Arn
+  UpdateOrderFunction:
+    Description: "UpdateOrder Lambda Function ARN"
+    Value: !GetAtt UpdateOrderFunction.Arn
 
-    DeleteOrderFunction:
-      Description: "DeleteOrder Lambda Function ARN"
-      Value: !GetAtt DeleteOrderFunction.Arn
+  DeleteOrderFunction:
+    Description: "DeleteOrder Lambda Function ARN"
+    Value: !GetAtt DeleteOrderFunction.Arn
 
-    CreateOrderFunction:
-      Description: "CreateOrder Lambda Function ARN"
-      Value: !GetAtt CreateOrderFunction.Arn
+  CreateOrderFunction:
+    Description: "CreateOrder Lambda Function ARN"
+    Value: !GetAtt CreateOrderFunction.Arn

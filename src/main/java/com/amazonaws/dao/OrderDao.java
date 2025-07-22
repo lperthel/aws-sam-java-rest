@@ -52,60 +52,48 @@ import java.util.stream.Collectors;
 
 public class OrderDao {
 
+    // Constants used across operations
     private static final String UPDATE_EXPRESSION = "SET customerId = :cid, preTaxAmount = :pre, postTaxAmount = :post ADD version :o";
     private static final String ORDER_ID = "orderId";
     private static final String PRE_TAX_AMOUNT_WAS_NULL = "preTaxAmount was null";
     private static final String POST_TAX_AMOUNT_WAS_NULL = "postTaxAmount was null";
     private static final String VERSION_WAS_NULL = "version was null";
 
-    private final String tableName;
-    private final DynamoDbClient dynamoDb;
-    private final int pageSize;
+    // Fields injected by Dagger via OrderModule
+    private final String tableName; // DynamoDB table name (injected from env var)
+    private final DynamoDbClient dynamoDb; // Low-level DynamoDB client
+    private final int pageSize; // Used for paginated queries
 
     /**
-     * Constructs an OrderDao.
-     * 
-     * @param dynamoDb  dynamodb client
-     * @param tableName name of table to use for orders
-     * @param pageSize  size of pages for getOrders
+     * Constructor used by Dagger to provide an OrderDao.
+     * The values come from OrderModule's @Provides method.
      */
-    public OrderDao(final DynamoDbClient dynamoDb, final String tableName,
-            final int pageSize) {
+    public OrderDao(final DynamoDbClient dynamoDb, final String tableName, final int pageSize) {
         this.dynamoDb = dynamoDb;
         this.tableName = tableName;
         this.pageSize = pageSize;
     }
 
     /**
-     * Returns an order or throws if the order does not exist.
-     * 
-     * @param orderId id of order to get
-     * @return the order if it exists
-     * @throws OrderDoesNotExistException if the order does not exist
+     * Fetches a single order by ID, or throws if it doesn't exist.
      */
     public Order getOrder(final String orderId) {
         try {
             return Optional.ofNullable(
                     dynamoDb.getItem(GetItemRequest.builder()
                             .tableName(tableName)
-                            .key(Collections.singletonMap(ORDER_ID,
-                                    AttributeValue.builder().s(orderId).build()))
+                            .key(Collections.singletonMap(ORDER_ID, AttributeValue.builder().s(orderId).build()))
                             .build()))
                     .map(GetItemResponse::item)
-                    .map(this::convert)
-                    .orElseThrow(() -> new OrderDoesNotExistException("Order "
-                            + orderId + " does not exist"));
+                    .map(this::convert) // Converts raw DynamoDB item map into Order POJO
+                    .orElseThrow(() -> new OrderDoesNotExistException("Order " + orderId + " does not exist"));
         } catch (ResourceNotFoundException e) {
             throw new TableDoesNotExistException("Order table " + tableName + " does not exist");
         }
     }
 
     /**
-     * Gets a page of orders, at most pageSize long.
-     * 
-     * @param exclusiveStartOrderId the exclusive start id for the next page.
-     * @return a page of orders.
-     * @throws TableDoesNotExistException if the order table does not exist
+     * Returns a page of orders, optionally starting after a given ID.
      */
     public OrderPage getOrders(final String exclusiveStartOrderId) {
         final ScanResponse result;
@@ -120,20 +108,20 @@ public class OrderDao {
             }
             result = dynamoDb.scan(scanBuilder.build());
         } catch (ResourceNotFoundException e) {
-            throw new TableDoesNotExistException("Order table " + tableName
-                    + " does not exist");
+            throw new TableDoesNotExistException("Order table " + tableName + " does not exist");
         }
 
+        // Convert all raw DynamoDB items into POJOs
         final List<Order> orders = result.items().stream()
                 .map(this::convert)
                 .collect(Collectors.toList());
 
+        // Prepare a response object with optional pagination key
         OrderPage.OrderPageBuilder builder = OrderPage.builder().orders(orders);
         if (result.lastEvaluatedKey() != null && !result.lastEvaluatedKey().isEmpty()) {
-            if ((!result.lastEvaluatedKey().containsKey(ORDER_ID)
-                    || isNullOrEmpty(result.lastEvaluatedKey().get(ORDER_ID).s()))) {
-                throw new IllegalStateException(
-                        "orderId did not exist or was not a non-empty string in the lastEvaluatedKey");
+            if (!result.lastEvaluatedKey().containsKey(ORDER_ID)
+                    || isNullOrEmpty(result.lastEvaluatedKey().get(ORDER_ID).s())) {
+                throw new IllegalStateException("Missing or invalid orderId in pagination key");
             } else {
                 builder.lastEvaluatedKey(result.lastEvaluatedKey().get(ORDER_ID).s());
             }
@@ -143,184 +131,90 @@ public class OrderDao {
     }
 
     /**
-     * Updates an order object.
-     * 
-     * @param order order to update
-     * @return updated order
+     * Updates an order with new values, performing optimistic locking via
+     * `version`.
      */
     public Order updateOrder(final Order order) {
-        if (order == null) {
+        if (order == null)
             throw new IllegalArgumentException("Order to update was null");
-        }
+
         String orderId = order.getOrderId();
-        if (isNullOrEmpty(orderId)) {
+        if (isNullOrEmpty(orderId))
             throw new IllegalArgumentException("orderId was null or empty");
-        }
+
+        // Expression values for update statement
         Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
         expressionAttributeValues.put(":cid",
                 AttributeValue.builder().s(validateCustomerId(order.getCustomerId())).build());
-
         try {
             expressionAttributeValues.put(":pre",
                     AttributeValue.builder().n(order.getPreTaxAmount().toString()).build());
-        } catch (NullPointerException e) {
-            throw new IllegalArgumentException(PRE_TAX_AMOUNT_WAS_NULL);
-        }
-        try {
             expressionAttributeValues.put(":post",
                     AttributeValue.builder().n(order.getPostTaxAmount().toString()).build());
+            expressionAttributeValues.put(":v", AttributeValue.builder().n(order.getVersion().toString()).build());
         } catch (NullPointerException e) {
-            throw new IllegalArgumentException(POST_TAX_AMOUNT_WAS_NULL);
+            throw new IllegalArgumentException("One of the required numeric fields was null");
         }
-        expressionAttributeValues.put(":o", AttributeValue.builder().n("1").build());
-        try {
-            expressionAttributeValues.put(":v",
-                    AttributeValue.builder().n(order.getVersion().toString()).build());
-        } catch (NullPointerException e) {
-            throw new IllegalArgumentException(VERSION_WAS_NULL);
-        }
+        expressionAttributeValues.put(":o", AttributeValue.builder().n("1").build()); // Increment version by 1
+
         final UpdateItemResponse result;
         try {
             result = dynamoDb.updateItem(UpdateItemRequest.builder()
                     .tableName(tableName)
-                    .key(Collections.singletonMap(ORDER_ID,
-                            AttributeValue.builder().s(order.getOrderId()).build()))
+                    .key(Collections.singletonMap(ORDER_ID, AttributeValue.builder().s(order.getOrderId()).build()))
                     .returnValues(ReturnValue.ALL_NEW)
                     .updateExpression(UPDATE_EXPRESSION)
                     .conditionExpression("attribute_exists(orderId) AND version = :v")
                     .expressionAttributeValues(expressionAttributeValues)
                     .build());
         } catch (ConditionalCheckFailedException e) {
-            throw new UnableToUpdateException(
-                    "Either the order did not exist or the provided version was not current");
+            throw new UnableToUpdateException("Order missing or version mismatch");
         } catch (ResourceNotFoundException e) {
-            throw new TableDoesNotExistException("Order table " + tableName
-                    + " does not exist and was deleted after reading the order");
+            throw new TableDoesNotExistException("Order table was deleted");
         }
         return convert(result.attributes());
     }
 
     /**
-     * Deletes an order.
-     * 
-     * @param orderId order id of order to delete
-     * @return the deleted order
+     * Deletes an order by ID. Throws if it doesn’t exist.
      */
     public Order deleteOrder(final String orderId) {
-
         try {
-            return Optional.ofNullable(dynamoDb.deleteItem(DeleteItemRequest.builder()
-                    .tableName(tableName)
-                    .key(Collections.singletonMap(ORDER_ID,
-                            AttributeValue.builder().s(orderId).build()))
-                    .conditionExpression("attribute_exists(orderId)")
-                    .returnValues(ReturnValue.ALL_OLD)
-                    .build()))
+            return Optional.ofNullable(
+                    dynamoDb.deleteItem(DeleteItemRequest.builder()
+                            .tableName(tableName)
+                            .key(Collections.singletonMap(ORDER_ID, AttributeValue.builder().s(orderId).build()))
+                            .conditionExpression("attribute_exists(orderId)")
+                            .returnValues(ReturnValue.ALL_OLD)
+                            .build()))
                     .map(DeleteItemResponse::attributes)
                     .map(this::convert)
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Condition passed but deleted item was null"));
+                    .orElseThrow(() -> new IllegalStateException("Deleted item was unexpectedly null"));
         } catch (ConditionalCheckFailedException e) {
-            throw new UnableToDeleteException(
-                    "A competing request changed the order while processing this request");
+            throw new UnableToDeleteException("Competing update or order missing");
         } catch (ResourceNotFoundException e) {
-            throw new TableDoesNotExistException("Order table " + tableName
-                    + " does not exist and was deleted after reading the order");
+            throw new TableDoesNotExistException("Order table was deleted");
         }
-    }
-
-    private Order convert(final Map<String, AttributeValue> item) {
-        if (item == null || item.isEmpty()) {
-            return null;
-        }
-        Order.OrderBuilder builder = Order.builder();
-
-        try {
-            builder.orderId(item.get(ORDER_ID).s());
-        } catch (NullPointerException e) {
-            throw new IllegalStateException(
-                    "item did not have an orderId attribute or it was not a String");
-        }
-
-        try {
-            builder.customerId(item.get("customerId").s());
-        } catch (NullPointerException e) {
-            throw new IllegalStateException(
-                    "item did not have an customerId attribute or it was not a String");
-        }
-
-        try {
-            builder.preTaxAmount(new BigDecimal(item.get("preTaxAmount").n()));
-        } catch (NullPointerException | NumberFormatException e) {
-            throw new IllegalStateException(
-                    "item did not have an preTaxAmount attribute or it was not a Number");
-        }
-
-        try {
-            builder.postTaxAmount(new BigDecimal(item.get("postTaxAmount").n()));
-        } catch (NullPointerException | NumberFormatException e) {
-            throw new IllegalStateException(
-                    "item did not have an postTaxAmount attribute or it was not a Number");
-        }
-
-        try {
-            builder.version(Long.valueOf(item.get("version").n()));
-        } catch (NullPointerException | NumberFormatException e) {
-            throw new IllegalStateException(
-                    "item did not have an version attribute or it was not a Number");
-        }
-
-        return builder.build();
-    }
-
-    private Map<String, AttributeValue> createOrderItem(final CreateOrderRequest order) {
-        Map<String, AttributeValue> item = new HashMap<>();
-        item.put(ORDER_ID, AttributeValue.builder().s(UUID.randomUUID().toString()).build());
-        item.put("version", AttributeValue.builder().n("1").build());
-        item.put("customerId",
-                AttributeValue.builder().s(validateCustomerId(order.getCustomerId())).build());
-        try {
-            item.put("preTaxAmount",
-                    AttributeValue.builder().n(order.getPreTaxAmount().toString()).build());
-        } catch (NullPointerException e) {
-            throw new IllegalArgumentException(PRE_TAX_AMOUNT_WAS_NULL);
-        }
-        try {
-            item.put("postTaxAmount",
-                    AttributeValue.builder().n(order.getPostTaxAmount().toString()).build());
-        } catch (NullPointerException e) {
-            throw new IllegalArgumentException(POST_TAX_AMOUNT_WAS_NULL);
-        }
-
-        return item;
-    }
-
-    private String validateCustomerId(final String customerId) {
-        if (isNullOrEmpty(customerId)) {
-            throw new IllegalArgumentException("customerId was null or empty");
-        }
-        return customerId;
     }
 
     /**
-     * Creates an order.
-     * 
-     * @param createOrderRequest details of order to create
-     * @return created order
+     * Creates a new order, retrying up to 10 times to ensure unique UUID.
      */
-    public Order createOrder(final CreateOrderRequest createOrderRequest) {
-        if (createOrderRequest == null) {
+    public Order createOrder(final CreateOrderRequest request) {
+        if (request == null)
             throw new IllegalArgumentException("CreateOrderRequest was null");
-        }
+
         int tries = 0;
         while (tries < 10) {
             try {
-                Map<String, AttributeValue> item = createOrderItem(createOrderRequest);
+                Map<String, AttributeValue> item = createOrderItem(request);
                 dynamoDb.putItem(PutItemRequest.builder()
                         .tableName(tableName)
                         .item(item)
                         .conditionExpression("attribute_not_exists(orderId)")
                         .build());
+
+                // Build Order object to return
                 return Order.builder()
                         .orderId(item.get(ORDER_ID).s())
                         .customerId(item.get("customerId").s())
@@ -329,16 +223,48 @@ public class OrderDao {
                         .version(Long.valueOf(item.get("version").n()))
                         .build();
             } catch (ConditionalCheckFailedException e) {
-                tries++;
+                tries++; // Retry on ID collision
             } catch (ResourceNotFoundException e) {
-                throw new TableDoesNotExistException(
-                        "Order table " + tableName + " does not exist");
+                throw new TableDoesNotExistException("Order table was deleted");
             }
         }
-        throw new CouldNotCreateOrderException(
-                "Unable to generate unique order id after 10 tries");
+        throw new CouldNotCreateOrderException("Too many ID collisions");
     }
 
+    // Converts a raw DynamoDB item into an Order object
+    private Order convert(final Map<String, AttributeValue> item) {
+        if (item == null || item.isEmpty())
+            return null;
+
+        return Order.builder()
+                .orderId(item.get(ORDER_ID).s())
+                .customerId(item.get("customerId").s())
+                .preTaxAmount(new BigDecimal(item.get("preTaxAmount").n()))
+                .postTaxAmount(new BigDecimal(item.get("postTaxAmount").n()))
+                .version(Long.valueOf(item.get("version").n()))
+                .build();
+    }
+
+    // Creates the item map used to write a new order to DynamoDB
+    private Map<String, AttributeValue> createOrderItem(final CreateOrderRequest order) {
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put(ORDER_ID, AttributeValue.builder().s(UUID.randomUUID().toString()).build());
+        item.put("version", AttributeValue.builder().n("1").build());
+        item.put("customerId", AttributeValue.builder().s(validateCustomerId(order.getCustomerId())).build());
+        item.put("preTaxAmount", AttributeValue.builder().n(order.getPreTaxAmount().toString()).build());
+        item.put("postTaxAmount", AttributeValue.builder().n(order.getPostTaxAmount().toString()).build());
+        return item;
+    }
+
+    // Simple string validator
+    private String validateCustomerId(final String customerId) {
+        if (isNullOrEmpty(customerId)) {
+            throw new IllegalArgumentException("customerId was null or empty");
+        }
+        return customerId;
+    }
+
+    // Null or empty string check
     private static boolean isNullOrEmpty(final String string) {
         return string == null || string.isEmpty();
     }

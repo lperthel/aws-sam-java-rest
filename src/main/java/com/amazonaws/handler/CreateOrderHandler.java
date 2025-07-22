@@ -37,33 +37,37 @@ import java.io.OutputStream;
 import javax.inject.Inject;
 
 public class CreateOrderHandler implements OrderRequestStreamHandler {
+
+        // Predefined error messages with HTTP 400 status code
         private static final ErrorMessage REQUIRE_CUSTOMER_ID_ERROR = new ErrorMessage(
                         "Require customerId to create an order", SC_BAD_REQUEST);
         private static final ErrorMessage REQUIRE_PRETAX_AMOUNT_ERROR = new ErrorMessage(
-                        "Require preTaxAmount to create an order",
-                        SC_BAD_REQUEST);
+                        "Require preTaxAmount to create an order", SC_BAD_REQUEST);
         private static final ErrorMessage REQUIRE_POST_TAX_AMOUNT_ERROR = new ErrorMessage(
-                        "Require postTaxAmount to create an order",
-                        SC_BAD_REQUEST);
+                        "Require postTaxAmount to create an order", SC_BAD_REQUEST);
 
         @Inject
-        ObjectMapper objectMapper;
+        ObjectMapper objectMapper; // Jackson JSON parser (injected by Dagger)
         @Inject
-        OrderDao orderDao;
-        private final OrderComponent orderComponent;
+        OrderDao orderDao; // DAO to create and persist orders (injected)
+        private final OrderComponent orderComponent; // Dagger DI component
 
+        // This class is invoked when lambda starts because of it's definition in the
+        // template.yml file
         public CreateOrderHandler() {
+                // Initialize Dagger dependency injection
                 orderComponent = DaggerOrderComponent.builder().build();
-                orderComponent.inject(this);
+                orderComponent.inject(this); // injects objectMapper and orderDao
         }
 
         @Override
-        public void handleRequest(InputStream input, OutputStream output,
-                        Context context) throws IOException {
+        public void handleRequest(InputStream input, OutputStream output, Context context) throws IOException {
                 final JsonNode event;
                 try {
+                        // Read raw JSON from input stream
                         event = objectMapper.readTree(input);
                 } catch (JsonMappingException e) {
+                        // Malformed input JSON
                         writeInvalidJsonInStreamResponse(objectMapper, output, e.getMessage());
                         return;
                 }
@@ -72,18 +76,21 @@ public class CreateOrderHandler implements OrderRequestStreamHandler {
                         writeInvalidJsonInStreamResponse(objectMapper, output, "event was null");
                         return;
                 }
-                JsonNode createOrderRequestBody = event.findValue("body");
+
+                // Extract the "body" node (which contains the actual payload from the client)
+                JsonNode createOrderRequestBody = event.findValue("body"); // This represents the lambda event object
                 if (createOrderRequestBody == null) {
                         objectMapper.writeValue(output,
                                         new GatewayResponse<>(
-                                                        objectMapper.writeValueAsString(
-                                                                        new ErrorMessage("Body was null",
-                                                                                        SC_BAD_REQUEST)),
+                                                        objectMapper.writeValueAsString(new ErrorMessage(
+                                                                        "Body was null", SC_BAD_REQUEST)),
                                                         APPLICATION_JSON, SC_BAD_REQUEST));
                         return;
                 }
+
                 final CreateOrderRequest request;
                 try {
+                        // Parse the raw JSON string into a CreateOrderRequest object
                         request = objectMapper.treeToValue(
                                         objectMapper.readTree(createOrderRequestBody.asText()),
                                         CreateOrderRequest.class);
@@ -91,8 +98,9 @@ public class CreateOrderHandler implements OrderRequestStreamHandler {
                         objectMapper.writeValue(output,
                                         new GatewayResponse<>(
                                                         objectMapper.writeValueAsString(
-                                                                        new ErrorMessage("Invalid JSON in body: "
-                                                                                        + e.getMessage(),
+                                                                        new ErrorMessage(
+                                                                                        "Invalid JSON in body: " + e
+                                                                                                        .getMessage(),
                                                                                         SC_BAD_REQUEST)),
                                                         APPLICATION_JSON, SC_BAD_REQUEST));
                         return;
@@ -100,12 +108,12 @@ public class CreateOrderHandler implements OrderRequestStreamHandler {
 
                 if (request == null) {
                         objectMapper.writeValue(output,
-                                        new GatewayResponse<>(
-                                                        objectMapper.writeValueAsString(REQUEST_WAS_NULL_ERROR),
+                                        new GatewayResponse<>(objectMapper.writeValueAsString(REQUEST_WAS_NULL_ERROR),
                                                         APPLICATION_JSON, SC_BAD_REQUEST));
                         return;
                 }
 
+                // Field validations (basic null checks)
                 if (isNullOrEmpty(request.getCustomerId())) {
                         objectMapper.writeValue(output,
                                         new GatewayResponse<>(
@@ -127,12 +135,18 @@ public class CreateOrderHandler implements OrderRequestStreamHandler {
                                                         APPLICATION_JSON, SC_BAD_REQUEST));
                         return;
                 }
+
                 try {
+                        // Pass the validated request object to DAO to create the order
                         final Order order = orderDao.createOrder(request);
+
+                        // Return 201 response with the created order as JSON
                         objectMapper.writeValue(output,
-                                        new GatewayResponse<>(objectMapper.writeValueAsString(order),
-                                                        APPLICATION_JSON, SC_CREATED)); // TODO redirect with a 303
+                                        new GatewayResponse<>(
+                                                        objectMapper.writeValueAsString(order), APPLICATION_JSON,
+                                                        SC_CREATED));
                 } catch (CouldNotCreateOrderException e) {
+                        // Failed to persist the order
                         objectMapper.writeValue(output,
                                         new GatewayResponse<>(
                                                         objectMapper.writeValueAsString(
